@@ -35,15 +35,14 @@
 #include <cutils/sockets.h>
 #include <termios.h>
 #include <cutils/properties.h>
-
 #define LOG_NDEBUG 0
-#define LOG_TAG "RIL"
+#define LOG_TAG "RIL-HUAWEI"
 #include <utils/Log.h>
 
 #define MAX_AT_RESPONSE 0x1000
 
 /* pathname returned from RIL_REQUEST_SETUP_DATA_CALL / RIL_REQUEST_SETUP_DEFAULT_PDP */
-#define PPP_TTY_PATH "ppp0"
+#define PPP_TTY_PATH "ppp1"
 
 #ifdef USE_TI_COMMANDS
 
@@ -353,7 +352,7 @@ static void onRadioPowerOn()
 	{
 		LOGD("onRadioPowerOn1");
 		sleep(10);
-		LOGD("onRadioPowerOn2");
+		LOGD("onRadioPowerOn");
 		at_send_command("ATE0", NULL);
 		at_send_command("AT+CLIP=1", NULL);
 		at_send_command("AT+CLIR=0", NULL);
@@ -405,8 +404,8 @@ static void onSIMReady()
 //		at_send_command("AT+CGEREP=1,0", NULL);
 
 		/* Enable NITZ reporting */
-		at_send_command("AT+CTZU=1", NULL);
-		at_send_command("AT+CTZR=1", NULL);
+		//at_send_command("AT+CTZU=1", NULL);
+		//at_send_command("AT+CTZR=1", NULL);
 		//at_send_command("AT+HTCCTZR=1", NULL);
 
 		/* Enable unsolizited RSSI reporting */
@@ -622,7 +621,7 @@ static void requestOrSendDataCallList(RIL_Token *t)
 	}
 
     // make sure pppd is still running, invalidate datacall if it isn't
-	if ((fd = open("/sys/class/net/ppp0/ifindex",O_RDONLY)) > 0)
+	if ((fd = open("/sys/class/net/ppp1/ifindex",O_RDONLY)) > 0)
     {
 		close(fd);
     }
@@ -1369,8 +1368,8 @@ static void requestScreenState(void *data, size_t datalen, RIL_Token t)
 			if (err < 0) goto error;
 			err = at_send_command("AT+CGREG=2", NULL);
 			if (err < 0) goto error;
-			err = at_send_command("AT+CGEREP=1,0", NULL);
-			if (err < 0) goto error;
+			//err = at_send_command("AT+CGEREP=1,0", NULL);
+			//if (err < 0) goto error;
 			//err = at_send_command("AT@HTCPDPFD=0", NULL);
 			//if (err < 0) goto error;
 			//err = at_send_command("AT+ENCSQ=1",NULL);
@@ -1389,8 +1388,8 @@ static void requestScreenState(void *data, size_t datalen, RIL_Token t)
 			if (err < 0) goto error;
 			err = at_send_command("AT+CGREG=0", NULL);
 			if (err < 0) goto error;
-			err = at_send_command("AT+CGEREP=0,0", NULL);
-			if (err < 0) goto error;
+			//err = at_send_command("AT+CGEREP=0,0", NULL);
+			//if (err < 0) goto error;
 			//err = at_send_command("AT@HTCPDPFD=1", NULL);
 			//if (err < 0) goto error;
 			//err = at_send_command("AT+ENCSQ=0",NULL);
@@ -1920,34 +1919,38 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t)
 	} else
 		pass = "dummy";
 
-	LOGD("requesting data connection to APN '%s'\n", apn);
+//	LOGD("requesting data connection to APN '%s'\n", apn);
 
 	//Make sure there is no existing connection or pppd instance running
-	if(killConn("1") < 0) {
-		LOGE("killConn Error!\n");
-		goto error;
-	}
+	//if(killConn("1") < 0) {
+	//	LOGE("killConn Error!\n");
+	//	goto error;
+	//}
 
 	if(isgsm) {
-		asprintf(&cmd, "AT+CGDCONT=1,\"IP\",\"%s\",,0,0", apn);
+		//asprintf(&cmd, "AT+CGDCONT=1,\"IP\",\"%s\",,0,0", apn);
 		//FIXME check for error here
-		err = at_send_command(cmd, NULL);
-		free(cmd);
+		//err = at_send_command(cmd, NULL);
+		//free(cmd);
 		// Set required QoS params to default
-		err = at_send_command("AT+CGQREQ=1", NULL);
+		//err = 
+		//at_send_command("AT+CGQREQ=1", NULL);
 		// Set minimum QoS params to default
-		err = at_send_command("AT+CGQMIN=1", NULL);
+		//err = 
+		//at_send_command("AT+CGQMIN=1", NULL);
 		// packet-domain event reporting
-		err = at_send_command("AT+CGEREP=1,0", NULL);
+		//err = 
+		//at_send_command("AT+CGEREP=1,0", NULL);
 		// Hangup anything that's happening there now
-		err = at_send_command("AT+CGACT=0,1", NULL);
+		//err = 
+		//at_send_command("AT+CGACT=0,1", NULL);
 		// Start data on PDP context 1
-		err = at_send_command("ATD*99***1#", &p_response);
+		//err = at_send_command("ATD*99***1#", &p_response);
 		//err = at_send_command("ATD*99#", &p_response);			
-		if (err < 0 || p_response->success == 0) {
-			at_response_free(p_response);
-			goto error;
-		}
+		//if (err < 0 || p_response->success == 0) {
+		//	at_response_free(p_response);
+		//	goto error;
+		//}
 		at_response_free(p_response);
 		LOGI("ATD sent!!!\n");
 		sleep(2); //Wait for the modem to finish
@@ -2009,21 +2012,22 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t)
 		fclose(pppconfig);
 		free(buffer);
 	}*/
+//linkname gprs
 
-	system("/system/bin/pppd /dev/ttyUSB0 115200 nocrtscts usepeerdns debug ipcp-accept-local ipcp-accept-remote defaultroute");
-
-	if (wait_for_property("net.ppp0.local-ip", NULL, 10) < 0) {
-		LOGE("Timeout waiting net.ppp0.local-ip - giving up!\n");
+	//system("/system/bin/pppd /dev/ttyUSB0 115200 crtscts usepeerdns noauth defaultroute noipdefault ipcp-accept-local ipcp-accept-remote ipcp-max-failure 30 lcp-echo-interval 5 lcp-echo-failure 30 modem dump debug kdebug 7");
+	system("/etc/ppp/init_pppd_gprs");
+	if (wait_for_property("net.ppp1.local-ip", NULL, 10) < 0) {
+		LOGE("Timeout waiting net.ppp1.local-ip - giving up!\n");
 		goto error;
 	}
 
-	property_get("net.ppp0.local-ip", ppp_local_ip, NULL);
-	property_get("net.ppp0.dns1", ppp_dns1, NULL);
-	property_get("net.ppp0.dns2", ppp_dns2, NULL);
-	property_get("net.ppp0.gw", ppp_gw, NULL);
+	property_get("net.ppp1.local-ip", ppp_local_ip, NULL);
+	property_get("net.ppp1.dns1", ppp_dns1, NULL);
+	property_get("net.ppp1.dns2", ppp_dns2, NULL);
+	property_get("net.ppp1.gw", ppp_gw, NULL);
 	sprintf(ppp_dnses, "%s %s", ppp_dns1, ppp_dns2);
 
-	LOGI("Got net.ppp0.local-ip: %s\n", ppp_local_ip);
+	LOGI("Got net.ppp1.local-ip: %s\n", ppp_local_ip);
 
 	responses = alloca(n * sizeof(RIL_Data_Call_Response_v6));
 	responses[0].status = 0;
@@ -2057,7 +2061,7 @@ static int killConn(char * cid)
 
 	LOGD("killConn");
 
-	while ((fd = open("/sys/class/net/ppp0/ifindex",O_RDONLY)) > 0)
+	while ((fd = open("/sys/class/net/ppp1/ifindex",O_RDONLY)) > 0)
 	{
 		if(i%5 == 0)
 			system("killall pppd");
@@ -4037,7 +4041,7 @@ static void onCancel (RIL_Token t)
 
 static const char * getVersion(void)
 {
-	return "HTC Vogue Community RIL 1.6.0";
+	return "ICS HUAWEI RIL 0.0.1 - WITH SCRIPT SUPPORT";
 }
 
 static void
@@ -4374,7 +4378,7 @@ static void initializeCallback(void *param)
 	at_send_command("AT+CMOD=0", NULL);
 
 	/*  Not muted */
-	//at_send_command("AT+CMUT=0", NULL);
+	at_send_command("AT+CMUT=0", NULL);
 
 	/*  detailed rings, unknown */
 	at_send_command("AT+CRC=1;+CR=1", NULL);
@@ -4411,7 +4415,7 @@ static void initializeCallback(void *param)
 		at_send_command("AT+CSCS=\"IRA\"", NULL);
 
 		/*  Extra stuff */
-		at_send_command("AT+FCLASS=0", NULL);
+		//at_send_command("AT+FCLASS=0", NULL);
 
                at_send_command("AT+CNMI=1,2,2,2,0", NULL);
 		//at_send_command("AT+CPPP=1", NULL);
