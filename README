@@ -3,9 +3,13 @@ which can be found at https://github.com/DerArtem/huaweigeneric-ril
 It has been tweaked to work with the Archos G9 Series of Android Tablets
 
 Successful Testing has been carried out using Huawei E1752Cu E173s-1 and a E1750
-The Function correctly
+To Function correctly on an Archos G9
 
-* it required /etc/ppp/init_pppd_gprs for pppd.
+permissions of pppd need updating to 4755:
+
+        chmod 4755 /system/bin/pppd
+
+It also requires /etc/ppp/init_pppd_gprs for pppd.
 	
 	PPPD_TTY=$(/system/bin/getprop ril.pppd_tty)
 	if test -z "$PPPD_TTY" ; then
@@ -32,3 +36,4 @@ The Function correctly
 	user root
 	disabled
 	oneshot
+
