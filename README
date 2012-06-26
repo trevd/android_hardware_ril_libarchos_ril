@@ -2,7 +2,7 @@ The module is a fork of the original huawegeneric-ril
 which can be found at https://github.com/DerArtem/huaweigeneric-ril
 It has been tweaked to work with the Archos G9 Series of Android Tablets
 
-Successful Testing has been carried out using Huawei E1752Cu E173s-1 and an E1750
+Successful Testing has been carried out using Huawei E1752Cu E173s-1 and a E1750
 The Function correctly
 
 * it required /etc/ppp/init_pppd_gprs for pppd.
