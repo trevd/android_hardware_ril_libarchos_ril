@@ -432,7 +432,6 @@ static void requestRadioPower(void *data, size_t datalen, RIL_Token t)
 	assert (datalen >= sizeof(int *));
 	onOff = ((int *)data)[0];
 
-/*
 	if (onOff == 0 && sState != RADIO_STATE_OFF) {
 		if(isgsm)
 			err = at_send_command("AT+CFUN=0", &p_response);
@@ -454,7 +453,6 @@ static void requestRadioPower(void *data, size_t datalen, RIL_Token t)
 		}
 		setRadioState(RADIO_STATE_SIM_NOT_READY);
 	}
-*/
 
 	at_response_free(p_response);
 	RIL_onRequestComplete(t, RIL_E_SUCCESS, NULL, 0);
@@ -499,6 +497,7 @@ static void requestOrSendDataCallList(RIL_Token *t)
 						NULL, 0);
 			return;
 		}
+
 
 		for (p_cur = p_response->p_intermediates; p_cur != NULL;
 				p_cur = p_cur->p_next)
@@ -1885,22 +1884,20 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t)
 	char *cmd;
 	char userpass[512];
 	int err;
-	ATResponse *p_response = NULL;
 	int fd, pppstatus,i;
-	FILE *pppconfig;
 	size_t cur = 0;
+	size_t len;
 	ssize_t written, rlen;
 	char status[32] = {0};
-	char *buffer;
-	long buffSize, len;
 	int retry = 10;
 	int n = 1;
-	RIL_Data_Call_Response_v6 *responses;
 	char ppp_dnses[(PROPERTY_VALUE_MAX * 2) + 3] = {'\0'};
 	char ppp_local_ip[PROPERTY_VALUE_MAX] = {'\0'};
 	char ppp_dns1[PROPERTY_VALUE_MAX] = {'\0'};
 	char ppp_dns2[PROPERTY_VALUE_MAX] = {'\0'};
 	char ppp_gw[PROPERTY_VALUE_MAX] = {'\0'};
+	RIL_Data_Call_Response_v6 *responses = alloca(n * sizeof(RIL_Data_Call_Response_v6));
+
 
 	apn = ((const char **)data)[2];
 	user = ((char **)data)[3];
@@ -1919,38 +1916,34 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t)
 	} else
 		pass = "dummy";
 
-//	LOGD("requesting data connection to APN '%s'\n", apn);
+	LOGD("requesting data connection to APN '%s'\n", apn);
 
 	//Make sure there is no existing connection or pppd instance running
-	//if(killConn("1") < 0) {
-	//	LOGE("killConn Error!\n");
-	//	goto error;
-	//}
-
-	if(isgsm) {
-		//asprintf(&cmd, "AT+CGDCONT=1,\"IP\",\"%s\",,0,0", apn);
+	if(killConn("1") < 0) {
+		LOGE("killConn Error!\n");
+		goto error;
+	}
+// skip the "normal" way of connecting, instead go through pppd
+/* 	if(isgsm) {
+		asprintf(&cmd, "AT+CGDCONT=1,\"IP\",\"%s\",,0,0", apn);
 		//FIXME check for error here
-		//err = at_send_command(cmd, NULL);
-		//free(cmd);
-		// Set required QoS params to default
-		//err = 
-		//at_send_command("AT+CGQREQ=1", NULL);
+		err = at_send_command(cmd, NULL);
+		free(cmd);
+		//Set required QoS params to default
+		//err = at_send_command("AT+CGQREQ=1", NULL);
 		// Set minimum QoS params to default
-		//err = 
-		//at_send_command("AT+CGQMIN=1", NULL);
+		//err = at_send_command("AT+CGQMIN=1", NULL);
 		// packet-domain event reporting
-		//err = 
-		//at_send_command("AT+CGEREP=1,0", NULL);
+		//err = at_send_command("AT+CGEREP=1,0", NULL);
 		// Hangup anything that's happening there now
-		//err = 
-		//at_send_command("AT+CGACT=0,1", NULL);
+		err = at_send_command("AT+CGACT=0,1", NULL);
 		// Start data on PDP context 1
-		//err = at_send_command("ATD*99***1#", &p_response);
+		err = at_send_command("ATD*99***1#", &p_response);
 		//err = at_send_command("ATD*99#", &p_response);			
-		//if (err < 0 || p_response->success == 0) {
-		//	at_response_free(p_response);
-		//	goto error;
-		//}
+		if (err < 0 || p_response->success == 0) {
+			at_response_free(p_response);
+			goto error;
+		}
 		at_response_free(p_response);
 		LOGI("ATD sent!!!\n");
 		sleep(2); //Wait for the modem to finish
@@ -1965,13 +1958,13 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t)
 		at_response_free(p_response);
 		sleep(2); //Wait for the modem to finish
 	}
-
+*/
 	//set up the pap/chap secrets file
+	//automatically writes the APN username/password into pap/chap secrets file
 	sprintf(userpass, "%s * %s", user, pass);
 	LOGI("Using username: %s\n", userpass);
-	/*	
-	if (0)
-	//if (0 != strcmp(userpass, userPassStatic))
+
+	if (0 != strcmp(userpass, userPassStatic))
 	{
 		strcpy (userPassStatic, userpass);
 		len = strlen(userpass);
@@ -1985,8 +1978,8 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t)
 			goto error;
 		write(fd, userpass, len);
 		close(fd);
-
-		pppconfig = fopen("/etc/ppp/options.huawei","r");
+	}
+	/*	pppconfig = fopen("/etc/ppp/options.huawei","r");
 		if(!pppconfig)
 			goto error;
 
@@ -2011,10 +2004,10 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t)
 		fprintf(pppconfig,"name %s\n",user);
 		fclose(pppconfig);
 		free(buffer);
-	}*/
-//linkname gprs
-
-	//system("/system/bin/pppd /dev/ttyUSB0 115200 crtscts usepeerdns noauth defaultroute noipdefault ipcp-accept-local ipcp-accept-remote ipcp-max-failure 30 lcp-echo-interval 5 lcp-echo-failure 30 modem dump debug kdebug 7");
+	*/
+// linkname gprs
+// pppd part
+ //system("/system/bin/pppd /dev/ttyUSB0 115200 crtscts usepeerdns noauth defaultroute noipdefault ipcp-accept-local ipcp-accept-remote ipcp-max-failure 30 lcp-echo-interval 5 lcp-echo-failure 30 modem dump debug kdebug 7");
 	system("/etc/ppp/init_pppd_gprs");
 	if (wait_for_property("net.ppp1.local-ip", NULL, 10) < 0) {
 		LOGE("Timeout waiting net.ppp1.local-ip - giving up!\n");
@@ -2029,7 +2022,7 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t)
 
 	LOGI("Got net.ppp1.local-ip: %s\n", ppp_local_ip);
 
-	responses = alloca(n * sizeof(RIL_Data_Call_Response_v6));
+
 	responses[0].status = 0;
 	responses[0].suggestedRetryTime = -1;
 	responses[0].cid = 1;
@@ -2040,8 +2033,10 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t)
 	responses[0].dnses = ppp_dnses;
 	responses[0].gateways = ppp_gw;
 
+//	requestOrSendDataCallList(&t);
+
 	RIL_onRequestComplete(t, RIL_E_SUCCESS, responses,
-                                n * sizeof(RIL_Data_Call_Response_v6));
+                             n * sizeof(RIL_Data_Call_Response_v6));
 
 	return;
 
@@ -3176,7 +3171,7 @@ static void requestGetIMSI(RIL_Token t)
                  }
                }
 
-/*             if (err < 0 || p_response->success == 0 ) */
+             if (err < 0 || p_response->success == 0 )
                if (success == 0)
 			goto error;
 		imsi = strdup(p_response->p_intermediates->line);
@@ -4041,7 +4036,7 @@ static void onCancel (RIL_Token t)
 
 static const char * getVersion(void)
 {
-	return "ICS HUAWEI RIL 0.0.1 - WITH SCRIPT SUPPORT";
+	return "ICS HUAWEI RIL 0.0.2 - WITH SCRIPT SUPPORT";
 }
 
 static void
@@ -4332,15 +4327,13 @@ static void initializeCallback(void *param)
 	at_handshake();
 
 	/* make sure the radio is off */
-/*
+
 	if(isgsm)
 		at_send_command("AT+CFUN=0", NULL);
 	else
 		at_send_command("AT+CFUN=66", NULL);
-*/
 
 	setRadioState (RADIO_STATE_OFF);
-
 
 	strcpy(erisystem,"Android");
 
@@ -4378,23 +4371,23 @@ static void initializeCallback(void *param)
 	at_send_command("AT+CMOD=0", NULL);
 
 	/*  Not muted */
-	at_send_command("AT+CMUT=0", NULL);
+	// at_send_command("AT+CMUT=0", NULL);
 
 	/*  detailed rings, unknown */
-	at_send_command("AT+CRC=1;+CR=1", NULL);
+	//at_send_command("AT+CRC=1;+CR=1", NULL);
 
 	/*  caller id = yes */
-	at_send_command("AT+CLIP=1", NULL);
+	//at_send_command("AT+CLIP=1", NULL);
 
 	/*  don't hide outgoing callerID */
-	at_send_command("AT+CLIR=0", NULL);
+	//at_send_command("AT+CLIR=0", NULL);
 
 	/*  bring up the device, also resets the stack. Don't do this! Handled elsewhere */
 //	at_send_command("AT+CFUN=1", NULL);
 
 	if(isgsm) {
 		/*  Call Waiting notifications */
-		at_send_command("AT+CCWA=1", NULL);
+		//at_send_command("AT+CCWA=1", NULL);
 
 		/*  No connected line identification */
 		at_send_command("AT+COLP=0", NULL);
@@ -4417,7 +4410,7 @@ static void initializeCallback(void *param)
 		/*  Extra stuff */
 		//at_send_command("AT+FCLASS=0", NULL);
 
-               at_send_command("AT+CNMI=1,2,2,2,0", NULL);
+                at_send_command("AT+CNMI=1,2,2,2,0", NULL);
 		//at_send_command("AT+CPPP=1", NULL);
 
 
