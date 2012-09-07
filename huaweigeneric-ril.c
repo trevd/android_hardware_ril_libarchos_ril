@@ -14,7 +14,8 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  */
-
+#define ALOG_NDEBUG 0
+#define ALOG_TAG "RIL-HUAWEI"
 #include <telephony/ril.h>
 #include <stdio.h>
 #include <assert.h>
@@ -35,8 +36,6 @@
 #include <cutils/sockets.h>
 #include <termios.h>
 #include <cutils/properties.h>
-#define LOG_NDEBUG 0
-#define LOG_TAG "RIL-HUAWEI"
 #include <utils/Log.h>
 
 #define MAX_AT_RESPONSE 0x1000
@@ -1893,6 +1892,7 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t)
 	int n = 1;
 	char ppp_dnses[(PROPERTY_VALUE_MAX * 2) + 3] = {'\0'};
 	char ppp_local_ip[PROPERTY_VALUE_MAX] = {'\0'};
+	char ril_pppd_tty[PROPERTY_VALUE_MAX] = {'\0'};
 	char ppp_dns1[PROPERTY_VALUE_MAX] = {'\0'};
 	char ppp_dns2[PROPERTY_VALUE_MAX] = {'\0'};
 	char ppp_gw[PROPERTY_VALUE_MAX] = {'\0'};
@@ -1919,10 +1919,10 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t)
 	ALOGD("requesting data connection to APN '%s'\n", apn);
 
 	//Make sure there is no existing connection or pppd instance running
-	if(killConn("1") < 0) {
-		ALOGE("killConn Error!\n");
-		goto error;
-	}
+	//if(killConn("1") < 0) {
+	//	ALOGE("killConn Error!\n");
+	//	goto error;
+	//}
 // skip the "normal" way of connecting, instead go through pppd
 /* 	if(isgsm) {
 		asprintf(&cmd, "AT+CGDCONT=1,\"IP\",\"%s\",,0,0", apn);
@@ -1962,7 +1962,7 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t)
 	//set up the pap/chap secrets file
 	//automatically writes the APN username/password into pap/chap secrets file
 	sprintf(userpass, "%s * %s", user, pass);
-	ALOGI("Using username: %s\n", userpass);
+	//ALOGI("Using username: %s\n", userpass);
 
 	if (0 != strcmp(userpass, userPassStatic))
 	{
@@ -2008,10 +2008,26 @@ static void requestSetupDataCall(void *data, size_t datalen, RIL_Token t)
 // linkname gprs
 // pppd part
  //system("/system/bin/pppd /dev/ttyUSB0 115200 crtscts usepeerdns noauth defaultroute noipdefault ipcp-accept-local ipcp-accept-remote ipcp-max-failure 30 lcp-echo-interval 5 lcp-echo-failure 30 modem dump debug kdebug 7");
-	system("/etc/ppp/init_pppd_gprs");
-	if (wait_for_property("net.ppp1.local-ip", NULL, 10) < 0) {
+	property_get("ril.pppd_tty",ril_pppd_tty,NULL);	
+	if (!strlen(ril_pppd_tty))
+	{
+		ALOGE("pppd tty Not Set\n");
+		RIL_onRequestComplete(t, RIL_E_GENERIC_FAILURE, NULL, 0);
+		return ;
+	}
+	ALOGI("Calling pppd with no script");
+	char pppd_cmd[4096] = {'\0'};
+	sprintf(pppd_cmd,"/system/bin/pppd %s 115200 linkname datakey unit 1 crtscts usepeerdns noauth defaultroute noipdefault ipcp-accept-local ipcp-accept-remote ipcp-max-failure 30 lcp-echo-interval 5 lcp-echo-failure 30 modem dump debug kdebug 8 connect \"/system/xbin/chat -v -t 500 -T *99***1# -f /system/etc/chatscripts/datakey_start\"",ril_pppd_tty);
+	system(pppd_cmd);
+	// Dialup 
+	sleep(4);
+	
+
+	
+	ALOGI("Waiting For Property");
+	if (wait_for_property("net.ppp1.local-ip", NULL, 50) < 0) {
 		ALOGE("Timeout waiting net.ppp1.local-ip - giving up!\n");
-		goto error;
+		//.goto error;
 	}
 
 	property_get("net.ppp1.local-ip", ppp_local_ip, NULL);
