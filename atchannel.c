@@ -30,7 +30,7 @@
 #include <unistd.h>
 
 #define LOG_NDEBUG 0
-#define LOG_TAG "AT"
+#define LOG_TAG "HUAWEI-AT"
 #include <utils/Log.h>
 
 #ifdef HAVE_ANDROID_OS

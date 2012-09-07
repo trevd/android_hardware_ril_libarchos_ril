@@ -6,15 +6,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "sms_gsm.h"
-
-#ifndef nodroid
 #define LOG_TAG "SMS_RIL"
 #include <utils/Log.h>
-#else
-#define ALOGD printf
-#define ALOGE printf
-#define ALOGI printf
-#endif
 
 int hex2int(char c) {
 	if(c>'9') return c-'A'+10;

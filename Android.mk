@@ -17,7 +17,6 @@ LOCAL_SRC_FILES:= \
 LOCAL_SHARED_LIBRARIES := \
 	libcutils libutils libril
 
-	# for asprinf
 LOCAL_CFLAGS := -D_GNU_SOURCE
 
 LOCAL_C_INCLUDES := $(KERNEL_HEADERS)
@@ -34,21 +33,12 @@ ifeq ($(TARGET_PRODUCT),dream)
   LOCAL_CFLAGS += -DPOLL_CALL_STATE -DUSE_QMI
 endif
 
+LOCAL_LDLIBS += -lpthread
+LOCAL_CFLAGS += -DRIL_SHLIB 
 LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE:= libhuaweigeneric-ril
+LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)
 
-ifeq (foo,foo)
-  #build shared library
-  LOCAL_SHARED_LIBRARIES += \
-	libcutils libutils
-  LOCAL_LDLIBS += -lpthread
-  LOCAL_CFLAGS += -DRIL_SHLIB 
-  LOCAL_MODULE:= libhuaweigeneric-ril
-  LOCAL_PRELINK_MODULE := false
-  include $(BUILD_SHARED_LIBRARY)
-else
-  #build executable
-  LOCAL_SHARED_LIBRARIES += \
-	libril
-  LOCAL_MODULE:= huaweigeneric-ril
-  include $(BUILD_EXECUTABLE)
-endif
+
+LOCAL_PRELINK_MODULE := false
+include $(BUILD_SHARED_LIBRARY)
