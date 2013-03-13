@@ -1,39 +1,86 @@
-The module is a fork of the original huawegeneric-ril
-which can be found at https://github.com/DerArtem/huaweigeneric-ril
-It has been tweaked to work with the Archos G9 Series of Android Tablets
 
-Successful Testing has been carried out using Huawei E1752Cu E173s-1 and a E1750
-To Function correctly on an Archos G9
+The modules has still a few problems:
 
-permissions of pppd need updating to 4755:
-
-        chmod 4755 /system/bin/pppd
-
-It also requires /etc/ppp/init_pppd_gprs for pppd.
-	
-	PPPD_TTY=$(/system/bin/getprop ril.pppd_tty)
-	if test -z "$PPPD_TTY" ; then
-     		/system/bin/setprop ril.pppd_tty /dev/ttyUSB0 
-	fi
-	PPPD_PID=
-	/system/bin/setprop "net.gprs.ppp-exit" ""
-
-	/system/bin/log -t pppd "Starting pppd"
-
-	/system/bin/pppd $PPPD_TTY 460800 $* debug kdebug 8 dump linkname gprs unit 1 crtscts usepeerdns noauth \
-	defaultroute noipdefault ipcp-accept-local ipcp-accept-remote ipcp-max-failure 30 lcp-echo-interval 5 lcp-echo-failure 30 \
-	modem dump connect "/system/xbin/chat -v -t 500 -f /system/etc/chatscripts/gprs_start"
+* required modify init.rc add:
+	on device-added-/dev/ttyUSB0
+	chmod 0777 /dev/ttyUSB0
+	on device-added-/dev/ttyUSB1
+	chmod 0777 /dev/ttyUSB1
+	on device-added-/dev/ttyUSB2
+	chmod 0777 /dev/ttyUSB2
+	on device-added-/dev/ttyUSB3
+	chmod 0777 /dev/ttyUSB3
+	on device-added-/dev/ttyUSB4
+	chmod 0777 /dev/ttyUSB4
+	on device-added-/dev/ttyUSB5
+	chmod 0777 /dev/ttyUSB5
 
 
-	PPPD_EXIT=$?
-	PPPD_PID=$!
-
-	/system/bin/log -t pppd "pppd exited with $PPPD_EXIT"
-
-	/system/bin/setprop "net.gprs.ppp-exit" "$PPPD_EXIT"
-	
-	service usb_modeswitch /system/bin/usbs
+	on boot
+	service ril-daemon /system/bin/rild
+	socket rild stream 660 root radio
+	socket rild-debug stream 660 radio system
 	user root
-	disabled
-	oneshot
+	group radio cache inet misc audio
 
+
+* Edit system/build.prop ,add:
+	# for 3g
+	rild.libpath=/system/lib/libhuaweigeneric-ril.so
+	rild.libargs=-d /dev/ttyUSB2 -v /dev/ttyUSB1
+	keyguard.no_require_sim=1
+
+
+----
+
+	pppd must be suid ROOT, and kernel must include ppp support compiled in
+	/system/etc/ppp/ip-up and also /system/etc/ppp/ip-down must also be suid ROOT
+	
+----
+
+	You also need the following files in /system/etc/ppp
+
+----	
+/system/etc/ppp/ip-up:
+
+#!/system/bin/sh
+case $1 in
+    ppp1)
+	/android/bin/iptables --flush;
+	/android/bin/iptables --table nat --flush;
+	/android/bin/iptables --delete-chain;
+	/android/bin/iptables --table nat --append POSTROUTING --out-interface ppp0 -j MASQUERADE;
+	/android/bin/iptables --append FORWARD --in-interface ppp1 -j ACCEPT;
+	echo 0 > /proc/sys/net/ipv4/ip_forward;
+	echo 1 > /proc/sys/net/ipv4/ip_forward;
+	;;
+    ppp0)
+    /system/bin/setprop "net.interfaces.defaultroute" "$LINKNAME";
+    ;;
+esac
+
+/system/bin/setprop "net.$LINKNAME.dns1" "$DNS1"
+/system/bin/setprop "net.$LINKNAME.dns2" "$DNS2" 
+/system/bin/setprop "net.$LINKNAME.local-ip" "$IPLOCAL" 
+/system/bin/setprop "net.$LINKNAME.remote-ip" "$IPREMOTE" 
+/system/bin/setprop "net.$LINKNAME.gw" "$IPREMOTE"
+/system/bin/setprop "net.$LINKNAME.if" "$IFNAME"
+
+
+----
+/system/etc/ppp/ip-down:
+
+#!/system/bin/sh
+case $1 in
+    ppp1)
+	echo 0 > /proc/sys/net/ipv4/ip_forward;
+	;;
+esac
+
+/system/bin/setprop "net.$LINKNAME.dns1" ""
+/system/bin/setprop "net.$LINKNAME.dns2" "" 
+/system/bin/setprop "net.$LINKNAME.local-ip" "" 
+/system/bin/setprop "net.$LINKNAME.remote-ip" "" 
+/system/bin/setprop "net.$LINKNAME.gw" ""
+/system/bin/setprop "net.$LINKNAME.if" ""
+ 

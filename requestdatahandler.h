@@ -1,6 +1,6 @@
-/* //device/system/reference-ril/at_tok.h
+/*
 **
-** Copyright 2006, The Android Open Source Project
+** Copyright (C) ST-Ericsson AB 2009
 **
 ** Licensed under the Apache License, Version 2.0 (the "License");
 ** you may not use this file except in compliance with the License.
@@ -13,19 +13,13 @@
 ** WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 ** See the License for the specific language governing permissions and
 ** limitations under the License.
+**
+** Author: Christian Bejram <christian.bejram@stericsson.com>
 */
+#ifndef _REQUESTDATAHANDLER_H
+#define _REQUESTDATAHANDLER_H 1
 
-#ifndef AT_TOK_H
-#define AT_TOK_H 1
+void *dupRequestData(int requestId, void *data, size_t datalen);
+void freeRequestData(int requestId, void *data, size_t datalen);
 
-int at_tok_start(char **p_cur);
-int at_tok_nextint(char **p_cur, int *p_out);
-int at_tok_nexthexint(char **p_cur, int *p_out);
-
-int at_tok_nextbool(char **p_cur, char *p_out);
-int at_tok_nextstr(char **p_cur, char **out);
-
-int at_tok_hasmore(char **p_cur);
-
-int at_tok_charcounter(char *p_in, char needle, int *p_out);
 #endif
