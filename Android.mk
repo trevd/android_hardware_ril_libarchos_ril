@@ -12,7 +12,7 @@ LOCAL_SRC_FILES := \
 	echocancel.c \
     fcp_parser.c \
     gsm.c \
-    huaweigeneric-ril.c \
+    ril.c \
     misc.c \
 	net-utils.c \
     requestdatahandler.c \
@@ -23,17 +23,18 @@ LOCAL_SHARED_LIBRARIES := \
     libcutils \
     libutils \
     libril \
-    libmedia
+    libmedia \
+    libusbhost
 
 # for asprinf
-LOCAL_CFLAGS := -D_GNU_SOURCE
+LOCAL_CFLAGS := -D_GNU_SOURCE -fpermissive -Wno-unused-parameter
 #build shared library
 LOCAL_CFLAGS += -DRIL_SHLIB
 
 LOCAL_C_INCLUDES := \
     hardware/ril/libril \
 
-LOCAL_MODULE:= libhuaweigeneric-ril
+LOCAL_MODULE:= libarchos-ril
 LOCAL_MODULE_TAGS := optional
 
 #

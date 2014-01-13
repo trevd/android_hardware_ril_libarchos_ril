@@ -86,7 +86,7 @@ C = is for?
 #define LOG_NDEBUG 0
 #define LOG_TAG "RIL"
 #include <utils/Log.h>
-
+#include <usbhost/usbhost.h>
 #include <telephony/ril.h>
 #include <stdio.h>
 #include <assert.h>
@@ -111,8 +111,8 @@ C = is for?
 #include <cutils/sockets.h>
 #include <termios.h>
 #include <cutils/properties.h>
-#include <cutils/logger.h>
-#include <cutils/logd.h>
+#include <log/logger.h>
+#include <log/logd.h>
 #include <stdbool.h>
 #include <stddef.h>
 
@@ -167,9 +167,16 @@ static const RIL_RadioFunctions s_callbacks = {
     getVersion
 };
 
-static char* rndis_iface_dev = "/dev/ttyUSB0";
-static char* ppp_iface_dev   = "/dev/ttyUSB0";
+#define DEFAULT_USB_RNDIS_IFACE_DEV  "/dev/ttyUSB0"
+#define DEFAULT_USB_PPP_IFACE_DEV    "/dev/ttyUSB0"
+
+#define DEFAULT_HS_RNDIS_IFACE_DEV  "/dev/ttyHS4"
+#define DEFAULT_HS_PPP_IFACE_DEV    "/dev/ttyHS4"
+
+static char* rndis_iface_dev = NULL;
+static char* ppp_iface_dev   = NULL;
 static int using_rndis = 0;
+static int using_hso = 0 ; 
 
 /* Last call index status */
 static int lastCallIdx = 0;
@@ -178,7 +185,7 @@ static int lastCallIdx = 0;
 static int lastCallFailCause = CALL_FAIL_NORMAL;
 
 #define RNDIS_IFACE "rmnet0"
-#define PPP_IFACE   "ppp1"
+#define PPP_IFACE   "ppp0"
 
 static RIL_RadioState sState = RADIO_STATE_UNAVAILABLE;
 static pthread_mutex_t s_state_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -6673,6 +6680,7 @@ error:
 }
 
 static pthread_t s_tid_queueRunner;
+static pthread_t s_tid_usbhostRunner;
 
 
 /** Do post- SIM ready initialization. */
@@ -6720,7 +6728,11 @@ static void onSIMReady(void *p)
 	 * otherwise weirdness with umlauts and other non-ASCII characters
 	 * can result
 	 */ 
-    at_send_command("AT+CSCS=\"GSM\"");
+    
+    if(using_hso)
+        at_send_command("AT+CSCS=\"HEX\"");
+    else
+        at_send_command("AT+CSCS=\"GSM\"");
 
 	/*  USSD unsolicited */
 	at_send_command("AT+CUSD=1");
@@ -7478,6 +7490,98 @@ static int safe_read(int fd, char *buf, int count)
 
     return count;
 }
+static int usb_device_removed(const char *dev_name, void *client_data)
+{
+        ALOGI("Dongled Device Removed\n");
+        return 0;
+}
+static int usb_discovery_done(void *client_data)
+{
+    ALOGI("Dongled Device Discovery Done\n");
+    return 0;
+}
+static int usb_device_added(const char *dev_name, void *client_data)
+{
+        struct usb_device *dev = usb_device_open(dev_name);
+
+    ALOGI("Dongled Device Added Opening USB Device %s\n",dev_name);
+    if (!dev) {
+        ALOGE("can't open device %s: %s\n", dev_name, strerror(errno));
+        return 0;
+    }
+
+   
+        uint16_t vid, pid;
+        char *mfg_name, *product_name, *serial;
+
+        vid = usb_device_get_vendor_id(dev);
+        pid = usb_device_get_product_id(dev);
+        mfg_name = usb_device_get_manufacturer_name(dev);
+        product_name = usb_device_get_product_name(dev);
+        serial = usb_device_get_serial(dev);
+
+        ALOGI("%s: %04x:%04x %s %s %s\n", dev_name, vid, pid,mfg_name, product_name, serial);
+
+        free(mfg_name);
+        free(product_name); 
+        free(serial);
+        usb_device_close(dev);
+
+    return 0;
+}
+#define USB_POWER_CONTROL_FILE "/sys/bus/usb/devices/usb1/power/control"
+#define USB_POWER_CONTROL_ON "on"
+// usb_power_on - return zero on success otherwise -1
+static int usb_power_on()
+{
+    
+    ALOGI("powering up usb devices\n");
+    
+    int fd = open(USB_POWER_CONTROL_FILE,O_RDONLY);
+    if ( fd == -1 ){
+        ALOGE("Cannot open %s %d %s\n",USB_POWER_CONTROL_FILE,errno,strerror(errno));
+        return -1 ; 
+    }
+    char* usb_state = calloc(2,sizeof(char));
+
+    read(fd,usb_state,2);
+    close(fd);
+    if(!strncmp(usb_state,USB_POWER_CONTROL_ON,2)){
+        free(usb_state);
+        return 0 ; 
+    }
+    
+    fd = open(USB_POWER_CONTROL_FILE,O_WRONLY);
+    if ( fd == -1 ){
+        ALOGE("Cannot open %s for writing %d %s\n",USB_POWER_CONTROL_FILE,errno,strerror(errno));
+        return -1 ; 
+    }
+    write(fd,USB_POWER_CONTROL_ON,2);
+    close(fd);    
+    return 0;
+}
+
+static void *usbhostRunner(void *param)
+{
+
+    if ( usb_power_on() == -1 ) 
+         pthread_exit(NULL) ;
+    
+    ALOGI("waiting for usb devices\n");
+    struct usb_host_context *ctx;
+    ctx = usb_host_init();
+    
+    if(ctx == NULL){
+        ALOGI("Cannot create usb_host_context\n");
+         pthread_exit(NULL) ;
+    }
+    
+    ALOGI("calling usb_host_run\n");
+    usb_host_run(ctx,usb_device_added,usb_device_removed, usb_discovery_done,NULL);
+    ALOGI("cleaning up usb_host_context\n");
+    usb_host_cleanup(ctx);
+    pthread_exit(NULL) ;
+}
 
 static void *queueRunner(void *param)
 {
@@ -7636,7 +7740,8 @@ const RIL_RadioFunctions *RIL_Init(const struct RIL_Env *env, int argc,
     char *loophost = NULL;
     const char *ctrl_path = NULL;
     struct queueArgs *queueArgs;
-    pthread_attr_t attr;
+    pthread_attr_t attr ;
+    pthread_attr_t usbhr_attr ;
 
 #if 0
 	/* Logcat test */
@@ -7712,9 +7817,46 @@ const RIL_RadioFunctions *RIL_Init(const struct RIL_Env *env, int argc,
         usage(argv[0]);
         return NULL;
     }
+    
+    if ( ! strncmp(ctrl_path,"/dev/ttyHS",10) )
+        using_hso = 1 ; 
+    
+    // set the ppp interface device if one
+    // hasn't been specified already   
+    if( ppp_iface_dev == NULL ) {
+        
+        // if the ctrl_path -d is using a HS tty
+        // then set the ppp iface to the default
+        // HS device
+        if ( using_hso )
+            ppp_iface_dev = DEFAULT_HS_PPP_IFACE_DEV ;
+        else
+            ppp_iface_dev = DEFAULT_USB_PPP_IFACE_DEV ;
+            
+        D("%s() Using default ppp interface %s as primary data channel.", __func__, ppp_iface_dev);
+    }
 
-    queueArgs = (struct queueArgs*) malloc(sizeof(struct queueArgs));
-    memset(queueArgs, 0, sizeof(struct queueArgs));
+
+    // set the rndis interface device if one
+    // hasn't been specified already   
+    if( rndis_iface_dev == NULL ) {
+        
+        // if the ctrl_path -d is using a HS tty
+        // then set the rndis iface to the default
+        // HS device
+        if ( using_hso )
+            rndis_iface_dev = DEFAULT_HS_RNDIS_IFACE_DEV ;
+        else
+            rndis_iface_dev = DEFAULT_USB_RNDIS_IFACE_DEV ; 
+            
+        D("%s() Using default network interface %s as primary data channel.", __func__, rndis_iface_dev);
+    }
+
+    pthread_attr_init(&usbhr_attr);
+    pthread_attr_setdetachstate(&usbhr_attr, PTHREAD_CREATE_DETACHED);
+    pthread_create(&s_tid_usbhostRunner, &usbhr_attr, usbhostRunner, NULL);
+    
+    queueArgs = (struct queueArgs*) calloc(1,sizeof(struct queueArgs));
 
     queueArgs->device_path = ctrl_path;
     queueArgs->port = port;
@@ -7728,80 +7870,4 @@ const RIL_RadioFunctions *RIL_Init(const struct RIL_Env *env, int argc,
     return &s_callbacks;
 }
 
-#else /* RIL_SHLIB */
-int main (int argc, char **argv)
-{
-    int opt;
-    int port = -1;
-    char *loophost = NULL;
-    const char *ctrl_path = NULL;
-    struct queueArgs *queueArgs;
-
-	memset(&sAudioChannel,0,sizeof(sAudioChannel));
-	
-    /* By default, use USB1 as audio channel */
-    strcpy(sAudioDevice,"/dev/ttyUSB1");
-
-    D("%s() entering...", __func__);
-
-    while (-1 != (opt = getopt(argc, argv, "z:n:i:p:d:v:"))) {
-        switch (opt) {
-            case 'z':
-                loophost = optarg;
-                D("%s() Using loopback host %s..", __func__, loophost);
-                break;
-
-            case 'p':
-                port = atoi(optarg);
-                if (port == 0) {
-                    usage(argv[0]);
-                    return 0;
-                }
-                D("%s() Opening loopback port %d", __func__, port);
-                break;
-
-            case 'd':
-                ctrl_path = optarg;
-                D("%s() Opening tty device %s", __func__, ctrl_path);
-                break;
-
-            case 'v':
-                strcpy(sAudioDevice,optarg);
-                D("%s() Opening voice tty device %s", __func__, sAudioDevice);
-                break;
-
-			case 'n':
-                rndis_iface_dev = optarg;
-                D("%s() Using network interface %s as primary data channel.", __func__, rndis_iface_dev);
-                break; 
-
-			case 'i':
-                ppp_iface_dev = optarg;
-                D("%s() Using ppp interface %s as primary data channel.", __func__, ppp_iface_dev);
-                break; 
-				
-            default:
-                usage(argv[0]);
-                return 0;
-        }
-    }
-
-    if (port < 0 && ctrl_path == NULL) {
-        usage(argv[0]);
-        return 0;
-    }
-
-    queueArgs = (struct queueArgs*) malloc(sizeof(struct queueArgs));
-    memset(queueArgs, 0, sizeof(struct queueArgs));
-
-    queueArgs->device_path = ctrl_path;
-    queueArgs->port = port;
-    queueArgs->loophost = loophost;
-
-    RIL_register(&s_callbacks);
-
-    queueRunner(queueArgs);
-
-    return 0;
-}
 #endif
