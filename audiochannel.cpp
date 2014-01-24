@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010 Eduardo José Tagle <ejtagle@tutopia.com>
+ * Copyright (C) 2010 Eduardo JosÃ© Tagle <ejtagle@tutopia.com>
  *
  * Since deeply inspired from portaudio dev port:
  * Copyright (C) 2009-2010 r3gis (http://www.r3gis.fr)
@@ -536,7 +536,7 @@ int gsm_audio_tunnel_start(struct GsmAudioTunnel *ctx,const char* gsmvoicechanne
                     &playBuffSize);
 	recBuffSize = playBuffSize;
 #else
-	android::AudioRecord::getMinFrameCount((int*)&recBuffSize,
+	android::AudioRecord::getMinFrameCount((size_t*)&recBuffSize,
 	                    ctx->sampling_rate * AUDIO_OVERSAMPLING, // Samples per second
 						format,
 						1);
@@ -551,7 +551,7 @@ int gsm_audio_tunnel_start(struct GsmAudioTunnel *ctx,const char* gsmvoicechanne
 	//while (recBuffSize < frame_size)  recBuffSize <<= 1;
 	//while (playBuffSize < frame_size) playBuffSize <<= 1;
 						
-	android::AudioTrack::getMinFrameCount((int*)&playBuffSize,
+	android::AudioTrack::getMinFrameCount((size_t*)&playBuffSize,
 						AUDIO_STREAM_VOICE_CALL,
 	                    ctx->sampling_rate * AUDIO_OVERSAMPLING); // Samples per second
 	
@@ -563,12 +563,13 @@ int gsm_audio_tunnel_start(struct GsmAudioTunnel *ctx,const char* gsmvoicechanne
 	
 	// Compute minimum playback queue size as a power of 2
 	play_qsize = 0;
-	while ((1 << play_qsize) < playBuffSize) play_qsize++;
+   // TODO : Sort this 
+	while ((1 << play_qsize) < (int)playBuffSize) play_qsize++;
 	play_qsize += 2; // And quad it
 	
 	// Compute minimum record queue size as a power of 2
 	rec_qsize = 0;
-	while ((1 << rec_qsize) < recBuffSize) rec_qsize++;
+	while ((1 << rec_qsize) < (int)recBuffSize) rec_qsize++;
 	rec_qsize += 2; // And quad it
 	
 #endif
@@ -736,8 +737,8 @@ int gsm_audio_tunnel_start(struct GsmAudioTunnel *ctx,const char* gsmvoicechanne
 error:
 		AudioQueue_end(&ctx->rec_q);
 		AudioQueue_end(&ctx->play_q);
-        if (ctx->play_strm) delete ((android::AudioTrack*)ctx->play_strm);
-        if (ctx->rec_strm) delete ((android::AudioRecord*)ctx->rec_strm);
+        if (ctx->play_strm) free(ctx->play_strm);
+        if (ctx->rec_strm) free(ctx->rec_strm);
 #ifdef CHECK_MEM_OVERRUN
         if (ctx->play_buf) free(((int*)ctx->play_buf)-1);
         if (ctx->rec_buf) free(((int*)ctx->rec_buf)-1);
@@ -815,8 +816,8 @@ int gsm_audio_tunnel_stop(struct GsmAudioTunnel *ctx)
 
 	ALOGD("Closing streaming");
 
-	if (ctx->play_strm) delete ((android::AudioTrack*)ctx->play_strm);
-	if (ctx->rec_strm) delete ((android::AudioRecord*)ctx->rec_strm);
+	if (ctx->play_strm) free(ctx->play_strm);
+	if (ctx->rec_strm) free(ctx->rec_strm);
 #ifdef CHECK_MEM_OVERRUN
 	if (ctx->play_buf) free(((int*)ctx->play_buf)-1);
 	if (ctx->rec_buf) free(((int*)ctx->rec_buf)-1);
